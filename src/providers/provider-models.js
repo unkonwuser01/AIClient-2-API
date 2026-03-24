@@ -37,7 +37,11 @@ export const PROVIDER_MODELS = {
         'claude-sonnet-4-5',
         'claude-sonnet-4-5-20250929',
         'claude-sonnet-4-20250514',
-        'claude-3-7-sonnet-20250219'
+        'claude-3-7-sonnet-20250219',
+        'deepseek-v3.2',
+        'minimax-m2.1',
+        'minimax-m2.5',
+        'qwen3-coder-next'
     ],
     'openai-custom': [],
     'openaiResponses-custom': [],

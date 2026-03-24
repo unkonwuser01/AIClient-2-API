@@ -1,7 +1,43 @@
-node_modules
+# =========================
+# Dependencies / package managers
+# =========================
+node_modules/
+node_modules.bak.*/
+.npm-cache/
+.pnpm-store/
+
+# =========================
+# Runtime / logs
+# =========================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# =========================
+# Local tool/workspace folders
+# =========================
 .serena/
 .claude/
 CLAUDE.md
+
+# =========================
+# OS / IDE
+# =========================
+.DS_Store
+.idea/
+.vscode/
+
+# =========================
+# Environment files
+# =========================
+.env
+.env.*
+
+# =========================
+# Local runtime config files (root)
+# =========================
 config.json
 provider_pools.json
 plugins.json
@@ -9,10 +45,30 @@ fetch_system_prompt.txt
 input_system_prompt.txt
 token-store.json
 usage-cache.json
-*_oauth_creds.json
-*-auth-token.json
 api-potluck-keys.json
 api-potluck-data.json
+
+# =========================
+# Local runtime config files (configs/)
+# =========================
+configs/config.json
+configs/provider_pools.json
+configs/plugins.json
+configs/fetch_system_prompt.txt
+configs/input_system_prompt.txt
+configs/token-store.json
+configs/usage-cache.json
+configs/api-potluck-keys.json
+configs/api-potluck-data.json
+
+# =========================
+# OAuth / token credentials
+# =========================
+*_oauth_creds.json
+*-auth-token.json
+**/*_oauth_creds.json
+**/*-auth-token.json
+configs/kiro/*_kiro-auth-token/
+
 # Codex credentials
 configs/codex/
-

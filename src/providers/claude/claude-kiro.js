@@ -58,13 +58,48 @@ const FULL_MODEL_MAPPING = {
     "claude-opus-4-5":"claude-opus-4.5",
     "claude-opus-4-5-20251101":"claude-opus-4.5",
     "claude-sonnet-4-5": "claude-sonnet-4.5",
-    "claude-sonnet-4-5-20250929": "claude-sonnet-4.5"
+    "claude-sonnet-4-5-20250929": "claude-sonnet-4.5",
+    "deepseek-v3.2": "deepseek-v3.2",
+    "minimax-m2.1": "minimax-m2.1",
+    "minimax-m2.5": "minimax-m2.5",
+    "qwen3-coder-next": "qwen3-coder-next"
 };
 
 // 只保留 KIRO_MODELS 中存在的模型映射
 const MODEL_MAPPING = Object.fromEntries(
     Object.entries(FULL_MODEL_MAPPING).filter(([key]) => KIRO_MODELS.includes(key))
 );
+
+// 严格模型映射模式：当请求模型没有映射时直接报错（默认关闭）
+const KIRO_STRICT_MODEL_MAPPING = process.env.KIRO_STRICT_MODEL_MAPPING === 'true';
+
+/**
+ * 解析请求模型到 Kiro 上游模型 ID
+ * @param {string} requestedModel - 客户端请求模型
+ * @param {string} fallbackModel - 回退模型（通常为默认模型）
+ * @returns {{ finalPublicModel: string, mappedModelId: string }}
+ */
+function resolveKiroModelSelection(requestedModel, fallbackModel) {
+    const requested = typeof requestedModel === 'string' ? requestedModel.trim() : '';
+    const fallback = typeof fallbackModel === 'string' ? fallbackModel.trim() : '';
+    const mappedModels = Object.keys(MODEL_MAPPING).sort();
+
+    if (requested && !MODEL_MAPPING[requested]) {
+        const message = `[Kiro] Model '${requested}' has no upstream mapping.${KIRO_STRICT_MODEL_MAPPING ? '' : ` Falling back to '${fallback}'.`} Mapped models: [${mappedModels.join(', ')}]`;
+        if (KIRO_STRICT_MODEL_MAPPING) {
+            throw new Error(message);
+        }
+        logger.warn(message);
+    }
+
+    const finalPublicModel = (requested && MODEL_MAPPING[requested]) ? requested : fallback;
+    const mappedModelId = MODEL_MAPPING[finalPublicModel];
+    if (!mappedModelId) {
+        throw new Error(`[Kiro] Fallback model '${finalPublicModel}' is not mapped in MODEL_MAPPING. Please check provider-models.js and FULL_MODEL_MAPPING.`);
+    }
+
+    return { finalPublicModel, mappedModelId };
+}
 
 const KIRO_AUTH_TOKEN_FILE = "kiro-auth-token.json";
 
@@ -938,7 +973,7 @@ async saveCredentialsToFile(filePath, newData) {
         processedMessages.length = 0;
         processedMessages.push(...mergedMessages);
 
-        const codewhispererModel = MODEL_MAPPING[model] || MODEL_MAPPING[this.modelName];
+        const { mappedModelId: codewhispererModel } = resolveKiroModelSelection(model, this.modelName);
         
         // 动态压缩 tools（保留全部工具，但过滤掉 web_search/websearch）
         let toolsContext = {};
@@ -1513,6 +1548,15 @@ async saveCredentialsToFile(filePath, newData) {
             const status = error.response?.status;
             const errorCode = error.code;
             const errorMessage = error.message || '';
+            const upstreamErrorRaw = error.response?.data;
+            const upstreamErrorText = upstreamErrorRaw
+                ? (typeof upstreamErrorRaw === 'string'
+                    ? upstreamErrorRaw
+                    : JSON.stringify(upstreamErrorRaw))
+                : '';
+            const upstreamErrorShort = upstreamErrorText
+                ? upstreamErrorText.slice(0, 500)
+                : '';
             
             // 检查是否为可重试的网络错误
             const isNetworkError = isRetryableNetworkError(error);
@@ -1544,6 +1588,9 @@ async saveCredentialsToFile(filePath, newData) {
             // Handle 403 (Forbidden) - mark as unhealthy immediately, no retry
             if (status === 403 && !isRetry) {
                 logger.info('[Kiro] Received 403. Marking credential as need refresh...');
+                if (upstreamErrorShort) {
+                    logger.warn(`[Kiro] 403 upstream body: ${upstreamErrorShort}`);
+                }
                 
                 // 检查是否为 temporarily suspended 错误
                 const isSuspended = errorMessage && errorMessage.toLowerCase().includes('temporarily is suspended');
@@ -1562,6 +1609,10 @@ async saveCredentialsToFile(filePath, newData) {
                     this._markCredentialNeedRefresh('403 Forbidden', error);
                 }
                 
+                if (upstreamErrorShort) {
+                    error.message = `${error.message}; upstream=${upstreamErrorShort}`;
+                }
+
                 // Mark error for credential switch without recording error count
                 error.shouldSwitchCredential = true;
                 error.skipErrorCount = true;
@@ -1800,7 +1851,7 @@ async saveCredentialsToFile(filePath, newData) {
             this._markCredentialNeedRefresh('Token near expiry in generateContent');
         }
         
-        const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
+        const { finalPublicModel: finalModel } = resolveKiroModelSelection(model, this.modelName);
         logger.info(`[Kiro] Calling generateContent with model: ${finalModel}`);
         
         // Estimate input tokens before making the API call
@@ -2177,7 +2228,7 @@ async saveCredentialsToFile(filePath, newData) {
             this._markCredentialNeedRefresh('Token near expiry in generateContentStream');
         }
         
-        const finalModel = MODEL_MAPPING[model] ? model : this.modelName;
+        const { finalPublicModel: finalModel } = resolveKiroModelSelection(model, this.modelName);
         logger.info(`[Kiro] Calling generateContentStream with model: ${finalModel} (real streaming)`);
 
         let inputTokens = 0;
